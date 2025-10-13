@@ -107,6 +107,15 @@ const ToolsTab = ({
     formRefs.current = {};
   }, [selectedTool]);
 
+  function uuidv4() {
+    return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+      (
+        +c ^
+        (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (+c / 4)))
+      ).toString(16),
+    );
+  }
+
   return (
     <TabsContent value="tools">
       <div className="grid grid-cols-2 gap-4">
@@ -170,6 +179,20 @@ const ToolsTab = ({
                               <span className="text-red-500 ml-1">*</span>
                             )}
                           </Label>
+
+                          <Button
+                            onClick={async () => {
+                              const uuid = uuidv4();
+                              navigator.clipboard.writeText(uuid);
+                              setParams({
+                                ...params,
+                                [key]: uuid,
+                              });
+                            }}
+                          >
+                            UUID
+                          </Button>
+
                           {prop.nullable ? (
                             <div className="flex items-center space-x-2">
                               <Checkbox
