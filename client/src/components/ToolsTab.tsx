@@ -135,6 +135,30 @@ const ToolsTab = ({
       );
   }
 
+  // History helpers (persisted in localStorage) per-field
+  function getHistory(name: string): string[] {
+    try {
+      const raw = localStorage.getItem(`inspector_uuid_history_${name}`);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch (e) {
+      console.debug("getHistory failed", e);
+      return [];
+    }
+  }
+
+  function addToHistory(name: string, value: string, max = 20) {
+    try {
+      const hist = getHistory(name);
+      const next = [value, ...hist.filter((h) => h !== value)].slice(0, max);
+      localStorage.setItem(
+        `inspector_uuid_history_${name}`,
+        JSON.stringify(next),
+      );
+    } catch (e) {
+      console.debug("addToHistory failed", e);
+    }
+  }
+
   // Auto-fill conversationId from cookie when a tool with that field is selected
   const conversationId = params["conversationId"] as string | undefined;
 
@@ -227,15 +251,13 @@ const ToolsTab = ({
                             )}
                           </Label>
                           {key === "conversationId" ? (
-                            <div className="flex">
+                            <div className="flex items-center space-x-2">
                               <Button
                                 onClick={async () => {
                                   const uuid = uuidv4();
                                   try {
                                     navigator.clipboard.writeText(uuid);
                                   } catch (err) {
-                                    // non-fatal: clipboard may be unavailable in some contexts
-                                    // log for debugging
                                     console.debug(
                                       "clipboard write failed",
                                       err,
@@ -244,12 +266,12 @@ const ToolsTab = ({
                                   // save per-field cookie name to avoid collisions
                                   try {
                                     setCookie(`inspector_uuid_${key}`, uuid);
+                                    addToHistory(key, uuid);
                                     toast({
                                       title: "UUID saved",
                                       description: `Saved UUID for ${key} to cookie.`,
                                     });
                                   } catch (e) {
-                                    // ignore cookie write errors but log for debugging
                                     console.debug("setCookie failed", e);
                                   }
                                   setParams({
@@ -262,32 +284,28 @@ const ToolsTab = ({
                                 UUID
                               </Button>
 
-                              <Button
-                                variant="ghost"
-                                onClick={() => {
-                                  const val = getCookie(
-                                    `inspector_uuid_${key}`,
-                                  );
-                                  if (val) {
-                                    setParams({
-                                      ...params,
-                                      [key]: val,
-                                    });
-                                    toast({
-                                      title: "UUID loaded",
-                                      description: `Loaded UUID for ${key} from cookie.`,
-                                    });
-                                  } else {
-                                    toast({
-                                      title: "No saved UUID",
-                                      description: `No UUID saved in cookie for ${key}.`,
-                                      variant: "destructive",
-                                    });
-                                  }
+                              <Select
+                                value={
+                                  params[key] === undefined
+                                    ? ""
+                                    : String(params[key])
+                                }
+                                onValueChange={(value) => {
+                                  if (value === "") return;
+                                  setParams({ ...params, [key]: value });
                                 }}
                               >
-                                Last UUID
-                              </Button>
+                                <SelectTrigger className="h-8 w-48">
+                                  <SelectValue placeholder="History" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getHistory(key).map((h) => (
+                                    <SelectItem key={h} value={h}>
+                                      {h}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                           ) : null}
 
