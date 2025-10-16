@@ -116,6 +116,53 @@ const ToolsTab = ({
     );
   }
 
+  // Cookie helpers: simple, path=/, expires in 365 days
+  function setCookie(name: string, value: string, days = 365) {
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
+  }
+
+  function getCookie(name: string) {
+    return document.cookie
+      .split(";")
+      .map((c) => c.trim())
+      .reduce(
+        (acc: string | null, cur) => {
+          if (cur.startsWith(`${name}=`))
+            return decodeURIComponent(cur.substring(name.length + 1));
+          return acc;
+        },
+        null as string | null,
+      );
+  }
+
+  // Auto-fill conversationId from cookie when a tool with that field is selected
+  useEffect(() => {
+    if (!selectedTool) return;
+    const props = (selectedTool.inputSchema?.properties ?? {}) as Record<
+      string,
+      unknown
+    >;
+    if (!Object.prototype.hasOwnProperty.call(props, "conversationId")) return;
+
+    try {
+      const cookieVal = getCookie(`inspector_uuid_conversationId`);
+      if (
+        cookieVal &&
+        (params["conversationId"] === undefined ||
+          params["conversationId"] === "")
+      ) {
+        setParams((prev) => ({ ...prev, conversationId: cookieVal }));
+        toast({
+          title: "Auto-filled conversationId",
+          description: `Applied saved conversationId from cookie.`,
+        });
+      }
+    } catch (e) {
+      console.debug("auto-fill conversationId failed", e);
+    }
+  }, [selectedTool, params]);
+
   return (
     <TabsContent value="tools">
       <div className="grid grid-cols-2 gap-4">
@@ -179,19 +226,63 @@ const ToolsTab = ({
                               <span className="text-red-500 ml-1">*</span>
                             )}
                           </Label>
+                          <div className="flex">
+                            <Button
+                              onClick={async () => {
+                                const uuid = uuidv4();
+                                try {
+                                  navigator.clipboard.writeText(uuid);
+                                } catch (err) {
+                                  // non-fatal: clipboard may be unavailable in some contexts
+                                  // log for debugging
+                                  console.debug("clipboard write failed", err);
+                                }
+                                // save per-field cookie name to avoid collisions
+                                try {
+                                  setCookie(`inspector_uuid_${key}`, uuid);
+                                  toast({
+                                    title: "UUID saved",
+                                    description: `Saved UUID for ${key} to cookie.`,
+                                  });
+                                } catch (e) {
+                                  // ignore cookie write errors but log for debugging
+                                  console.debug("setCookie failed", e);
+                                }
+                                setParams({
+                                  ...params,
+                                  [key]: uuid,
+                                });
+                              }}
+                              className="mr-2"
+                            >
+                              UUID
+                            </Button>
 
-                          <Button
-                            onClick={async () => {
-                              const uuid = uuidv4();
-                              navigator.clipboard.writeText(uuid);
-                              setParams({
-                                ...params,
-                                [key]: uuid,
-                              });
-                            }}
-                          >
-                            UUID
-                          </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => {
+                                const val = getCookie(`inspector_uuid_${key}`);
+                                if (val) {
+                                  setParams({
+                                    ...params,
+                                    [key]: val,
+                                  });
+                                  toast({
+                                    title: "UUID loaded",
+                                    description: `Loaded UUID for ${key} from cookie.`,
+                                  });
+                                } else {
+                                  toast({
+                                    title: "No saved UUID",
+                                    description: `No UUID saved in cookie for ${key}.`,
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                            >
+                              Last UUID
+                            </Button>
+                          </div>
 
                           {prop.nullable ? (
                             <div className="flex items-center space-x-2">
